@@ -1,5 +1,5 @@
 'use client';
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Button } from '@mui/material';
 
 const CameraButton: React.FC = () => {
@@ -19,47 +19,85 @@ const CameraButton: React.FC = () => {
       alert('กรุณาใช้เบราว์เซอร์ Chrome เพื่อเปิดกล้อง');
       return;
     }
+
+    // หากมี stream เก่าอยู่ ให้ปิดก่อน
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        videoRef.current.play();
-      }
-      setStream(mediaStream);
+      setStream(mediaStream); // ตั้งค่า stream ใหม่, useEffect จะจัดการการเล่นวิดีโอ
+      setPhoto(null); // ล้างรูปภาพเก่า (ถ้ามี)
     } catch (err) {
-      console.error(err);
+      console.error("Error accessing camera:", err);
       alert('ไม่สามารถเข้าถึงกล้องได้');
+      setStream(null); // ตรวจสอบให้แน่ใจว่า stream เป็น null หากเกิดข้อผิดพลาด
     }
   };
 
+  // Effect สำหรับจัดการการเล่นวิดีโอเมื่อ stream พร้อมใช้งาน
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(error => {
+        console.error("Error attempting to play video:", error);
+        // อาจจะแสดง alert หรือข้อความแจ้งผู้ใช้หากการเล่นวิดีโอล้มเหลว
+        // alert('ไม่สามารถเล่นวิดีโอได้');
+      });
+    }
+
+    // Cleanup function: จะทำงานเมื่อ component unmount หรือ stream เปลี่ยนไป
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [stream]); // ให้ useEffect ทำงานใหม่ทุกครั้งที่ stream เปลี่ยน
+
   // ถ่ายรูป (จับภาพจาก video)
   const handleCapture = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || !stream) return; // ตรวจสอบว่ามี videoRef และ stream
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0);
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       const imgData = canvas.toDataURL('image/png');
       setPhoto(imgData);
     }
-    // ปิดกล้อง
-    stream?.getTracks().forEach(track => track.stop());
+    // ปิดกล้องหลังจากถ่ายรูป
+    stream.getTracks().forEach(track => track.stop());
     setStream(null);
   };
 
   return (
     <div>
-      <Button variant="contained" onClick={handleOpenCamera}>
-        เปิดกล้อง
-      </Button>
+      {!stream ? (
+        <Button variant="contained" onClick={handleOpenCamera}>
+          เปิดกล้อง
+        </Button>
+      ) : (
+        <Button variant="contained" onClick={() => {
+          if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+          }
+          setStream(null);
+          setPhoto(null);
+        }}>
+          ปิดกล้อง
+        </Button>
+      )}
 
       {stream && (
-        <>
+        <div style={{ marginTop: 16 }}>
           <video
             ref={videoRef}
-            style={{ width: '100%', maxWidth: 400, marginTop: 16 }}
+            style={{ width: '100%', maxWidth: 400 }}
+            autoPlay // เพิ่ม autoPlay
+            playsInline //สำคัญสำหรับ iOS และช่วยให้เล่นได้ในหลาย browser
+            muted // การปิดเสียงวิดีโอของตัวเองมักจำเป็นสำหรับการ autoplay ในบางเบราว์เซอร์
           />
           <Button
             variant="contained"
@@ -68,7 +106,7 @@ const CameraButton: React.FC = () => {
           >
             ถ่ายรูป
           </Button>
-        </>
+        </div>
       )}
 
       {photo && (
