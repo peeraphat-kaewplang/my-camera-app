@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect } from "react";
+import Image from 'next/image'; // Import Image จาก next/image
 import { Button } from "@mui/material";
 import { useCamera } from "@/hook/useCamera";
 
@@ -9,6 +10,7 @@ const CameraButton: React.FC = () => {
     stream,
     photo,
     error,
+    photoDimensions,
     isBrowserSupported,
     openCamera,
     capturePhoto,
@@ -69,15 +71,24 @@ const CameraButton: React.FC = () => {
         </div>
       )}
 
-      {photo && (
-        <div style={{ marginTop: 16 }}>
-          <img
-            src={photo}
-            alt="Captured"
-            style={{ width: "100%", maxWidth: 400, border: "1px solid grey" }}
-          />
-        </div>
-      )}
+      {photo &&
+        photoDimensions && ( // ตรวจสอบว่า photoDimensions มีค่าก่อนใช้งาน
+          <div style={{ marginTop: 16, maxWidth: "400px", width: "100%" }}>
+            <Image
+              src={photo} // photo คือ data URL
+              alt="Captured"
+              width={photoDimensions.width} // กำหนด width ของรูปภาพจริง
+              height={photoDimensions.height} // กำหนด height ของรูปภาพจริง
+              style={{
+                width: "100%", // ทำให้รูปภาพ responsive ตามขนาด container
+                height: "auto", // รักษาสัดส่วนของรูปภาพ
+                border: "1px solid grey",
+              }}              // priority // อาจจะใส่ prop นี้ถ้าต้องการให้ Next.js โหลดรูปนี้เร็วขึ้น (ถ้าเป็นรูปสำคัญ)
+
+              // priority // อาจจะใส่ prop นี้ถ้าต้องการให้ Next.js โหลดรูปนี้เร็วขึ้น (ถ้าเป็นรูปสำคัญ)
+            />
+          </div>
+        )}
     </div>
   );
 };

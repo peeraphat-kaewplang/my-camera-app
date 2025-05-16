@@ -1,11 +1,17 @@
-'use client'; // Hooks ที่มีการใช้ state, effect, หรือ browser APIs ต้องระบุว่าเป็น client-side
+"use client";
 
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from "react";
+
+export interface PhotoDimensions {
+  width: number;
+  height: number;
+}
 
 export interface CameraHookResult {
   videoRef: React.RefObject<HTMLVideoElement>;
   stream: MediaStream | null;
-  photo: string | null;
+  photo: string | null; // Data URL
+  photoDimensions: PhotoDimensions | null; // ขนาดของรูปภาพ
   error: string | null;
   isBrowserSupported: () => boolean;
   openCamera: () => Promise<void>;
@@ -18,6 +24,8 @@ export const useCamera = (): CameraHookResult => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoDimensions, setPhotoDimensions] =
+    useState<PhotoDimensions | null>(null); // State ใหม่สำหรับเก็บขนาดรูป
   const [error, setError] = useState<string | null>(null);
 
   const clearError = useCallback(() => {
@@ -25,7 +33,7 @@ export const useCamera = (): CameraHookResult => {
   }, []);
 
   const isBrowserSupported = useCallback(() => {
-    if (typeof navigator === 'undefined') return false;
+    if (typeof navigator === "undefined") return false;
     const userAgent = navigator.userAgent;
     const vendor = navigator.vendor;
 
@@ -40,87 +48,104 @@ export const useCamera = (): CameraHookResult => {
   }, []);
 
   const openCamera = useCallback(async () => {
-    clearError(); // เคลียร์ error เก่าก่อน
+    clearError();
     if (!isBrowserSupported()) {
-      setError('กรุณาใช้เบราว์เซอร์ Google Chrome เท่านั้นเพื่อเปิดกล้อง');
+      setError("กรุณาใช้เบราว์เซอร์ Google Chrome เท่านั้นเพื่อเปิดกล้อง");
       return;
     }
 
-    if (stream) { // หากมี stream เก่า ให้ปิดก่อน
-      stream.getTracks().forEach(track => track.stop());
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
     }
 
+    // เคลียร์รูปภาพและขนาดเก่าเมื่อเปิดกล้องใหม่
+    setPhoto(null);
+    setPhotoDimensions(null);
+
     const videoConstraints: MediaTrackConstraints = {};
-    if (typeof navigator !== 'undefined') {
-      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (typeof navigator !== "undefined") {
+      const isMobileDevice =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        );
       if (isMobileDevice) {
         videoConstraints.facingMode = { ideal: "environment" };
       } else {
         videoConstraints.facingMode = { ideal: "user" };
       }
     } else {
-      videoConstraints.facingMode = { ideal: "user" }; // Fallback
+      videoConstraints.facingMode = { ideal: "user" };
     }
 
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: videoConstraints
+        video: videoConstraints,
       });
       setStream(mediaStream);
-      setPhoto(null); // ล้างรูปภาพเก่า
     } catch (err) {
       console.error("Error accessing camera with constraints:", err);
-      setError('ไม่สามารถเข้าถึงกล้องได้ หรือกล้องที่ต้องการไม่พร้อมใช้งาน');
+      setError("ไม่สามารถเข้าถึงกล้องได้ หรือกล้องที่ต้องการไม่พร้อมใช้งาน");
       setStream(null);
     }
   }, [stream, isBrowserSupported, clearError]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !videoRef.current) return;
-
-    let currentStream = stream; // Capture stream for cleanup and usage in effect
-
+    if (typeof window === "undefined" || !videoRef.current) return;
+    const currentStream = stream;
     if (currentStream && videoRef.current) {
       videoRef.current.srcObject = currentStream;
-      videoRef.current.play().catch(playError => {
+      videoRef.current.play().catch((playError) => {
         console.error("Error attempting to play video:", playError);
-        setError('มีปัญหาในการเล่นวิดีโอจากกล้อง');
+        setError("มีปัญหาในการเล่นวิดีโอจากกล้อง");
       });
     } else if (videoRef.current) {
-      videoRef.current.srcObject = null; // Clear srcObject if stream is null
+      videoRef.current.srcObject = null;
     }
-
     return () => {
       if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
+        currentStream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [stream]); // Re-run effect if stream object changes
+  }, [stream]);
 
   const capturePhoto = useCallback(() => {
     clearError();
-    if (!videoRef.current || !stream || !videoRef.current.videoWidth || !videoRef.current.videoHeight) {
-      setError("กล้องยังไม่พร้อมใช้งาน หรือวิดีโอไม่มีขนาดที่ถูกต้องสำหรับการถ่ายภาพ");
+    if (
+      !videoRef.current ||
+      !stream ||
+      !videoRef.current.videoWidth ||
+      !videoRef.current.videoHeight
+    ) {
+      setError(
+        "กล้องยังไม่พร้อมใช้งาน หรือวิดีโอไม่มีขนาดที่ถูกต้องสำหรับการถ่ายภาพ"
+      );
+      setPhotoDimensions(null); // เคลียร์ขนาดรูปถ้ามีปัญหา
       return;
     }
-    
-    const canvas = document.createElement('canvas');
-    // ตั้งค่าขนาด canvas ให้ตรงกับขนาดจริงของวิดีโอที่แสดงผล
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
 
-    const ctx = canvas.getContext('2d');
+    const canvas = document.createElement("canvas");
+    const currentVideoWidth = videoRef.current.videoWidth;
+    const currentVideoHeight = videoRef.current.videoHeight;
+
+    canvas.width = currentVideoWidth;
+    canvas.height = currentVideoHeight;
+
+    const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const imgData = canvas.toDataURL('image/png');
-      setPhoto(imgData);
+      const imgDataUrl = canvas.toDataURL("image/png");
+      setPhoto(imgDataUrl);
+      setPhotoDimensions({
+        width: currentVideoWidth,
+        height: currentVideoHeight,
+      }); // เก็บขนาดของรูปภาพ
     } else {
       setError("ไม่สามารถสร้าง Canvas Context สำหรับถ่ายภาพได้");
+      setPhotoDimensions(null);
     }
 
-    // ปิด stream หลังจากถ่ายภาพ
     if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach((track) => track.stop());
     }
     setStream(null);
   }, [stream, videoRef, clearError]);
@@ -128,16 +153,18 @@ export const useCamera = (): CameraHookResult => {
   const closeCamera = useCallback(() => {
     clearError();
     if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach((track) => track.stop());
     }
     setStream(null);
     setPhoto(null);
+    setPhotoDimensions(null); // เคลียร์ขนาดรูปเมื่อปิดกล้อง
   }, [stream, clearError]);
 
   return {
     videoRef,
     stream,
     photo,
+    photoDimensions, // ส่ง photoDimensions ออกไป
     error,
     isBrowserSupported,
     openCamera,
