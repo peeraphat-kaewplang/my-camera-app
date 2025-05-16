@@ -1,140 +1,69 @@
 "use client";
-import React, { useRef, useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { Button } from "@mui/material";
+import { useCamera } from "@/hook/useCamera";
 
 const CameraButton: React.FC = () => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [photo, setPhoto] = useState<string | null>(null);
+  const {
+    videoRef,
+    stream,
+    photo,
+    error,
+    isBrowserSupported,
+    openCamera,
+    capturePhoto,
+    closeCamera,
+    clearError, // เพิ่ม clearError หากต้องการเรียกจาก component โดยตรง
+  } = useCamera();
 
-  // ตรวจสอบว่าเป็น Google Chrome แท้ๆ เท่านั้น
-  const isChrome = () => {
-    const userAgent = navigator.userAgent;
-    const vendor = navigator.vendor;
+  useEffect(() => {
+    if (error) {
+      alert(error);
+      // คุณอาจต้องการเรียก clearError() ที่นี่หลังจากแสดง alert
+      // หรือปล่อยให้ hook จัดการการเคลียร์ error เองเมื่อมีการ action ใหม่
+      // ตัวอย่าง: clearError(); // หากต้องการให้ alert แสดงครั้งเดียวต่อ error
+    }
+  }, [error, clearError]);
 
-    // ตรวจสอบ Chrome บน Desktop หรือ Android
-    // ต้องมี "Chrome" ใน userAgent, vendor เป็น "Google Inc.", และ *ต้องไม่มี* "Edg/" (สำหรับ Edge) หรือ "OPR/" (สำหรับ Opera)
-    const isDesktopOrAndroidChrome =
-      userAgent.includes("Chrome") &&
-      vendor === "Google Inc." &&
-      !userAgent.includes("Edg/") &&
-      !userAgent.includes("OPR/"); // เพิ่มการตรวจสอบ Opera เพื่อความแม่นยำ
-
-    // ตรวจสอบ Chrome บน iOS
-    // จะมี "CriOS/" (Chrome for iOS) ใน userAgent
-    const isIOSChrome = userAgent.includes("CriOS/");
-
-    // ถ้าเงื่อนไขใดเงื่อนไขหนึ่งเป็นจริง ให้ถือว่าเป็น Chrome ที่อนุญาต
-    return isDesktopOrAndroidChrome || isIOSChrome;
-  };
-
-  // เปิดกล้อง
-  const handleOpenCamera = async () => {
-    if (!isChrome()) {
+  const handleOpenCameraClick = () => {
+    if (!isBrowserSupported()) {
+      // Hook ก็มีการตรวจสอบนี้อยู่แล้ว แต่การตรวจสอบที่นี่จะให้ feedback ทันที
       alert("กรุณาใช้เบราว์เซอร์ Google Chrome เท่านั้นเพื่อเปิดกล้อง");
       return;
     }
-
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-    }
-
-    // กำหนด constraints สำหรับ video
-    const videoConstraints: MediaTrackConstraints = {};
-
-    // ตรวจสอบว่าเป็น mobile device หรือไม่ เพื่อกำหนด facingMode
-    // navigator.userAgent สามารถเข้าถึงได้ใน client-side function นี้
-    if (typeof navigator !== "undefined") {
-      const isMobileDevice =
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-          navigator.userAgent
-        );
-      if (isMobileDevice) {
-        videoConstraints.facingMode = { ideal: "environment" }; // พยายามใช้กล้องหลังเป็นหลักสำหรับมือถือ
-      } else {
-        videoConstraints.facingMode = { ideal: "user" }; // พยายามใช้กล้องหน้าเป็นหลักสำหรับ Desktop
-      }
-    } else {
-      // กรณีที่ navigator ไม่พร้อมใช้งาน (ไม่ควรเกิดขึ้นใน client component event handler)
-      // อาจจะตั้งค่า default เป็น user หรือปล่อยว่างเพื่อให้ browser จัดการ
-      videoConstraints.facingMode = { ideal: "user" };
-    }
-
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: videoConstraints, // ส่ง videoConstraints ที่กำหนด facingMode เข้าไป
-      });
-      setStream(mediaStream);
-      setPhoto(null);
-    } catch (err) {
-      console.error("Error accessing camera with constraints:", err);
-      alert(
-        "ไม่สามารถเข้าถึงกล้องได้ หรือกล้องที่ต้องการ (เช่น กล้องหลังบนมือถือ) ไม่พร้อมใช้งาน"
-      );
-      setStream(null);
-    }
-  };
-  useEffect(() => {
-    if (stream && videoRef.current) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch((error) => {
-        console.error("Error attempting to play video:", error);
-      });
-    }
-
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-    };
-  }, [stream]);
-
-  const handleCapture = () => {
-    if (!videoRef.current || !stream) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const imgData = canvas.toDataURL("image/png");
-      setPhoto(imgData);
-    }
-    stream.getTracks().forEach((track) => track.stop());
-    setStream(null);
+    openCamera();
   };
 
   return (
     <div>
       {!stream ? (
-        <Button variant="contained" onClick={handleOpenCamera}>
+        <Button variant="contained" onClick={handleOpenCameraClick}>
           เปิดกล้อง
         </Button>
       ) : (
-        <Button
-          variant="contained"
-          onClick={() => {
-            if (stream) {
-              stream.getTracks().forEach((track) => track.stop());
-            }
-            setStream(null);
-            setPhoto(null);
-          }}
-        >
+        <Button variant="contained" onClick={closeCamera}>
           ปิดกล้อง
         </Button>
       )}
+
+      {/* แสดงข้อความ error จาก hook หากต้องการ */}
+      {/* {error && <p style={{ color: 'red', marginTop: '8px' }}>Error: {error}</p>} */}
 
       {stream && (
         <div style={{ marginTop: 16 }}>
           <video
             ref={videoRef}
-            style={{ width: "100%", maxWidth: 400 }}
+            style={{ width: "100%", maxWidth: 400, border: "1px solid grey" }} // เพิ่ม border ให้เห็นกรอบวิดีโอ
             autoPlay
             playsInline
             muted
           />
-          <Button variant="contained" onClick={handleCapture} sx={{ mt: 2 }}>
+          <Button
+            variant="contained"
+            onClick={capturePhoto}
+            sx={{ mt: 2 }}
+            disabled={!stream} // ปิดการใช้งานปุ่มหาก stream หายไป (เช่นหลังถ่ายรูป)
+          >
             ถ่ายรูป
           </Button>
         </div>
@@ -145,7 +74,7 @@ const CameraButton: React.FC = () => {
           <img
             src={photo}
             alt="Captured"
-            style={{ width: "100%", maxWidth: 400 }}
+            style={{ width: "100%", maxWidth: 400, border: "1px solid grey" }}
           />
         </div>
       )}
