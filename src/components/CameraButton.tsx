@@ -12,8 +12,6 @@ const CameraButton: React.FC = () => {
     const userAgent = navigator.userAgent;
     const vendor = navigator.vendor;
 
-    console.log("User Agent:", userAgent);
-
     // ตรวจสอบ Chrome บน Desktop หรือ Android
     // ต้องมี "Chrome" ใน userAgent, vendor เป็น "Google Inc.", และ *ต้องไม่มี* "Edg/" (สำหรับ Edge) หรือ "OPR/" (สำหรับ Opera)
     const isDesktopOrAndroidChrome =
@@ -41,19 +39,41 @@ const CameraButton: React.FC = () => {
       stream.getTracks().forEach((track) => track.stop());
     }
 
+    // กำหนด constraints สำหรับ video
+    const videoConstraints: MediaTrackConstraints = {};
+
+    // ตรวจสอบว่าเป็น mobile device หรือไม่ เพื่อกำหนด facingMode
+    // navigator.userAgent สามารถเข้าถึงได้ใน client-side function นี้
+    if (typeof navigator !== "undefined") {
+      const isMobileDevice =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        );
+      if (isMobileDevice) {
+        videoConstraints.facingMode = { ideal: "environment" }; // พยายามใช้กล้องหลังเป็นหลักสำหรับมือถือ
+      } else {
+        videoConstraints.facingMode = { ideal: "user" }; // พยายามใช้กล้องหน้าเป็นหลักสำหรับ Desktop
+      }
+    } else {
+      // กรณีที่ navigator ไม่พร้อมใช้งาน (ไม่ควรเกิดขึ้นใน client component event handler)
+      // อาจจะตั้งค่า default เป็น user หรือปล่อยว่างเพื่อให้ browser จัดการ
+      videoConstraints.facingMode = { ideal: "user" };
+    }
+
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: videoConstraints, // ส่ง videoConstraints ที่กำหนด facingMode เข้าไป
       });
       setStream(mediaStream);
       setPhoto(null);
     } catch (err) {
-      console.error("Error accessing camera:", err);
-      alert("ไม่สามารถเข้าถึงกล้องได้");
+      console.error("Error accessing camera with constraints:", err);
+      alert(
+        "ไม่สามารถเข้าถึงกล้องได้ หรือกล้องที่ต้องการ (เช่น กล้องหลังบนมือถือ) ไม่พร้อมใช้งาน"
+      );
       setStream(null);
     }
   };
-
   useEffect(() => {
     if (stream && videoRef.current) {
       videoRef.current.srcObject = stream;
