@@ -7,57 +7,67 @@ const CameraButton: React.FC = () => {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
 
-  // ตรวจสอบให้ใช้ได้เฉพาะเบราว์เซอร์ Chrome
+  // ตรวจสอบว่าเป็น Google Chrome แท้ๆ เท่านั้น
   const isChrome = () => {
-    const ua = navigator.userAgent;
-    return /Chrome/.test(ua) && /Google Inc/.test(navigator.vendor);
+    const userAgent = navigator.userAgent;
+    const vendor = navigator.vendor;
+
+    // เงื่อนไขสำหรับ Chrome:
+    // 1. มีคำว่า "Chrome" ใน userAgent
+    // 2. navigator.vendor เป็น "Google Inc."
+    // 3. *ต้องไม่มี* "Edg/" ใน userAgent (ซึ่งเป็นตัวบ่งชี้ของ Microsoft Edge ที่ใช้ Chromium)
+    const isActualChrome = userAgent.includes("Chrome") && 
+                           vendor === "Google Inc." && 
+                           !userAgent.includes("Edg/");
+                           
+    // อาจเพิ่มการตรวจสอบเพื่อบล็อกเบราว์เซอร์ Chromium อื่นๆ ที่อาจพยายามปลอมเป็น Chrome ได้อีก
+    // เช่น Opera (OPR/), Vivaldi (Vivaldi/) ฯลฯ หากต้องการความเข้มงวดมากขึ้น
+    // if (isActualChrome && (userAgent.includes("OPR/") || userAgent.includes("Vivaldi/"))) {
+    //   return false;
+    // }
+
+    return isActualChrome;
   };
 
   // เปิดกล้อง
   const handleOpenCamera = async () => {
     if (!isChrome()) {
-      alert('กรุณาใช้เบราว์เซอร์ Chrome เพื่อเปิดกล้อง');
+      alert('กรุณาใช้เบราว์เซอร์ Google Chrome เท่านั้นเพื่อเปิดกล้อง');
       return;
     }
 
-    // หากมี stream เก่าอยู่ ให้ปิดก่อน
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
     }
 
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
-      setStream(mediaStream); // ตั้งค่า stream ใหม่, useEffect จะจัดการการเล่นวิดีโอ
-      setPhoto(null); // ล้างรูปภาพเก่า (ถ้ามี)
+      setStream(mediaStream);
+      setPhoto(null);
     } catch (err) {
       console.error("Error accessing camera:", err);
       alert('ไม่สามารถเข้าถึงกล้องได้');
-      setStream(null); // ตรวจสอบให้แน่ใจว่า stream เป็น null หากเกิดข้อผิดพลาด
+      setStream(null);
     }
   };
 
-  // Effect สำหรับจัดการการเล่นวิดีโอเมื่อ stream พร้อมใช้งาน
   useEffect(() => {
     if (stream && videoRef.current) {
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch(error => {
         console.error("Error attempting to play video:", error);
-        // อาจจะแสดง alert หรือข้อความแจ้งผู้ใช้หากการเล่นวิดีโอล้มเหลว
-        // alert('ไม่สามารถเล่นวิดีโอได้');
       });
     }
 
-    // Cleanup function: จะทำงานเมื่อ component unmount หรือ stream เปลี่ยนไป
     return () => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [stream]); // ให้ useEffect ทำงานใหม่ทุกครั้งที่ stream เปลี่ยน
+  }, [stream]);
 
-  // ถ่ายรูป (จับภาพจาก video)
   const handleCapture = () => {
-    if (!videoRef.current || !stream) return; // ตรวจสอบว่ามี videoRef และ stream
+    if (!videoRef.current || !stream) return;
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
@@ -67,7 +77,6 @@ const CameraButton: React.FC = () => {
       const imgData = canvas.toDataURL('image/png');
       setPhoto(imgData);
     }
-    // ปิดกล้องหลังจากถ่ายรูป
     stream.getTracks().forEach(track => track.stop());
     setStream(null);
   };
@@ -95,9 +104,9 @@ const CameraButton: React.FC = () => {
           <video
             ref={videoRef}
             style={{ width: '100%', maxWidth: 400 }}
-            autoPlay // เพิ่ม autoPlay
-            playsInline //สำคัญสำหรับ iOS และช่วยให้เล่นได้ในหลาย browser
-            muted // การปิดเสียงวิดีโอของตัวเองมักจำเป็นสำหรับการ autoplay ในบางเบราว์เซอร์
+            autoPlay
+            playsInline
+            muted
           />
           <Button
             variant="contained"
