@@ -95,19 +95,28 @@ export const useCamera = (): CameraHookResult => {
       });
 
       setStream(mediaStream);
-    } catch (err: any) {
-      // console.error("Error in openCamera -> getUserMedia:", err.name, err.message, err);
-      let errorMessage = "ไม่สามารถเข้าถึงกล้องได้";
-      if (err.message) {
-        errorMessage += `: ${err.message}`;
-      }
-      if (err.name === "NotAllowedError") {
-        errorMessage = "กรุณาอนุญาตการเข้าถึงกล้องในเบราว์เซอร์ของคุณ";
-      } else if (
-        err.name === "NotFoundError" ||
-        err.name === "DevicesNotFoundError"
-      ) {
-        errorMessage = "ไม่พบกล้องที่พร้อมใช้งาน";
+    } catch (err: unknown) {
+      console.error("Error in openCamera -> getUserMedia:", err);
+      let errorMessage = "ไม่สามารถเข้าถึงกล้องได้ หรือกล้องที่ต้องการไม่พร้อมใช้งาน";
+
+      if (err instanceof Error) { // ตรวจสอบว่าเป็น instance ของ Error
+        console.error("Error details:", err.name, err.message);
+        // errorMessage = `ไม่สามารถเข้าถึงกล้อง: ${err.name} - ${err.message}`; // ใช้ข้อความที่เจาะจงมากขึ้นด้านล่าง
+        if(err.name === "NotAllowedError"){ // Permission denied
+          errorMessage = "กรุณาอนุญาตการเข้าถึงกล้องในเบราว์เซอร์ของคุณ";
+        } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError"){ // No camera found
+          errorMessage = "ไม่พบกล้องที่พร้อมใช้งาน";
+        } else if (err.name === "AbortError") { // User or system aborted
+          errorMessage = "การเข้าถึงกล้องถูกยกเลิก";
+        } else if (err.name === "NotReadableError" || err.name === "TrackStartError") { // Hardware error
+            errorMessage = "กล้องอาจจะกำลังถูกใช้งานโดยโปรแกรมอื่น หรือมีปัญหาทาง Hardware";
+        } else if (err.name === "OverconstrainedError" || err.name === "ConstraintNotSatisfiedError") { // Constraints issue
+            errorMessage = "ไม่สามารถตั้งค่ากล้องตามที่ร้องขอได้ (เช่น facingMode ไม่ถูกต้อง หรือความละเอียดไม่รองรับ)";
+        } else {
+            errorMessage = `เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุในการเข้าถึงกล้อง: ${err.message}`;
+        }
+      } else if (typeof err === 'string') {
+        errorMessage = err;
       }
       setError(errorMessage);
       setStream(null);
@@ -154,7 +163,7 @@ export const useCamera = (): CameraHookResult => {
       }
     };
 
-    const handleVideoError = (e: Event) => {
+    const handleVideoError = () => {
       // console.error('Video Element Error:', e, currentVideoElement.error);
       setError(
         `เกิดข้อผิดพลาดกับ Video Element: ${
