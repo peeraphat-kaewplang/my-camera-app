@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 type Blog = {
     id: number;
@@ -27,7 +28,18 @@ function getMockBlogs(): Blog[] {
     ];
 }
 
-export async function GET() {
+
+export async function GET(request: Request) {
+    const headers = request.headers;
+    const contentType = headers.get("Content-Type");
+    const authorization = headers.get("Authorization");
+
     const blogs = getMockBlogs();
-    return NextResponse.json(blogs);
+    return NextResponse.json({
+        blogs,
+        receivedHeaders: {
+            contentType,
+            authorization,
+        },
+    });
 }
