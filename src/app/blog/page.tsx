@@ -21,7 +21,8 @@ async function getBlogs() {
 }
 
 export default async function BlogPage() {
-  const {blogs , ...receivedHeaders} = await getBlogs();
+  const {blogs , receivedHeaders} = await getBlogs();
+  console.log("Received Headers:", receivedHeaders);
   return (
     <main>
       <h1>Blog Posts</h1>
