@@ -1,9 +1,8 @@
-// filepath: c:\Users\LENOVO LOQ INTEL\Desktop\Project Dev\my-camera-app\src\app\page.tsx
 "use client";
 import CameraButton from "@/components/CameraButton";
 import { useEffect } from "react";
 
-async function callApi(data: any) {
+async function callApi(data: Record<string, unknown>) {
   await fetch("/api", {
     method: "POST",
     headers: {
